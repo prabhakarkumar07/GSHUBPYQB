@@ -33,7 +33,7 @@ router.get("/analytics", async (req: any, res) => {
 // Feedback
 router.get("/feedback", async (req: any, res) => {
   try {
-    const { data, error } = await req.supabase.from("feedback").select("*").order("created_at", { ascending: false }).limit(300);
+    const { data, error } = await req.supabase.from("feedback").select("*").limit(300);
     if (error) throw error;
     res.json({ feedback: data || [] });
   } catch (error) {
@@ -97,7 +97,7 @@ router.delete("/taxonomy/:type/:id", async (req: any, res) => {
 router.post("/questions/search", async (req: any, res) => {
   try {
     const { page, perPage, subject, topic, search } = req.body;
-    let query = req.supabase.from("questions").select("*", { count: "exact" }).order("created_at", { ascending: false }).range(page * perPage, page * perPage + perPage - 1);
+    let query = req.supabase.from("questions").select("*", { count: "exact" }).range(page * perPage, page * perPage + perPage - 1);
     
     if (subject) query = query.eq("subject_id", subject);
     if (topic) query = query.eq("topic_id", topic);
@@ -193,7 +193,7 @@ router.post("/live-exams", async (req: any, res) => {
 // Users Management
 router.get("/users", async (req: any, res: any) => {
   try {
-    const { data, error } = await getServiceClient().from("profiles").select("*").order("created_at", { ascending: false }).limit(500);
+    const { data, error } = await getServiceClient().from("profiles").select("*").limit(500);
     if (error) throw error;
     res.json({ users: data || [] });
   } catch (error) {
