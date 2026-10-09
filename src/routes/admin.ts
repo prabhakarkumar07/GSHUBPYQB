@@ -1,5 +1,5 @@
-import { Router } from "express";
-import { getAuthClient } from "../supabase";
+﻿import { Router } from "express";
+import { getAuthClient, getServiceClient } from "../supabase";
 
 const router = Router();
 
@@ -186,6 +186,33 @@ router.post("/live-exams", async (req: any, res) => {
     res.json({ success: true, exam: data });
   } catch (error) {
     res.status(500).json({ error: "Failed to create live exam" });
+  }
+});
+
+
+// Users Management
+router.get("/users", async (req: any, res: any) => {
+  try {
+    const { data, error } = await getServiceClient().from("profiles").select("*").order("created_at", { ascending: false }).limit(500);
+    if (error) throw error;
+    res.json({ users: data || [] });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+router.patch("/users/:id", async (req: any, res: any) => {
+  try {
+    const { role, subscription_tier } = req.body;
+    const updates: any = {};
+    if (role) updates.role = role;
+    if (subscription_tier) updates.subscription_tier = subscription_tier;
+    
+    const { error } = await getServiceClient().from("profiles").update(updates).eq("id", req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update user" });
   }
 });
 

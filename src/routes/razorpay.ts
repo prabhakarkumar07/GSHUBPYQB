@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { requireAuth } from "@clerk/express";
 import Razorpay from "razorpay";
 import rateLimit from "express-rate-limit";
 
@@ -12,38 +11,58 @@ const orderLimiter = rateLimit({
   message: { error: "Too many orders created from this IP, please try again after an hour." },
 });
 
-router.post("/create-order", orderLimiter, requireAuth(), async (req: any, res: any) => {
-  const clerkUserId = req.auth.userId;
+router.post("/create-order", orderLimiter, async (req: any, res: any) => {
+  const clerkUserId = req.auth?.userId;
   if (!clerkUserId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const rzp = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID || "",
-      key_secret: process.env.RAZORPAY_KEY_SECRET || "",
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID!,
+      key_secret: process.env.RAZORPAY_KEY_SECRET!,
     });
 
-    const amount = 499 * 100; // Rs 499 in paise
-
-    const order = await rzp.orders.create({
-      amount,
+    const options = {
+      amount: req.body.amount, // amount in smallest currency unit (paise)
       currency: "INR",
-      receipt: `receipt_${clerkUserId}_${Date.now()}`,
-      notes: {
-        userId: clerkUserId,
-      },
-    });
+      receipt: "receipt_order_" + Date.now(),
+    };
 
-    res.json({
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      keyId: process.env.RAZORPAY_KEY_ID, // Send key to frontend for checkout initialization
-    });
-  } catch (error: any) {
-    console.error("Razorpay create-order error:", error);
-    res.status(500).json({ error: error.message || "Failed to create Razorpay order" });
+    const order = await razorpay.orders.create(options);
+
+    res.json({ orderId: order.id });
+  } catch (error) {
+    console.error("Razorpay Order Error:", error);
+    res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
+router.post("/verify-payment", async (req: any, res: any) => {
+  const clerkUserId = req.auth?.userId;
+  if (!clerkUserId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+  try {
+    const crypto = require("crypto");
+    const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!);
+    hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
+    const generated_signature = hmac.digest("hex");
+
+    if (generated_signature === razorpay_signature) {
+      // Payment is successful, update subscription tier via supabase service role
+      // Note: Must use a service role key here to bypass RLS for upgrading users.
+      // (Implementation requires adding service role key to env)
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: "Invalid signature" });
+    }
+  } catch (error) {
+    console.error("Payment Verification Error:", error);
+    res.status(500).json({ error: "Failed to verify payment" });
   }
 });
 
