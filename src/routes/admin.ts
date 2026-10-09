@@ -216,4 +216,25 @@ router.patch("/users/:id", async (req: any, res: any) => {
   }
 });
 
+
+router.get("/live-exams", async (req: any, res: any) => {
+  try {
+    const { data, error } = await req.supabase.from("live_exams").select("*").order("start_time", { ascending: false });
+    if (error) throw error;
+    res.json({ exams: data });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch live exams" });
+  }
+});
+
+router.delete("/live-exams/:id", async (req: any, res: any) => {
+  try {
+    const { error } = await req.supabase.from("live_exams").delete().eq("id", req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete live exam" });
+  }
+});
+
 export default router;
