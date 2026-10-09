@@ -197,7 +197,7 @@ router.get("/users", async (req: any, res: any) => {
     if (error) throw error;
     res.json({ users: data || [] });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch users" });
+    console.error("Fetch Users Error:", error); res.status(500).json({ error: "Failed to fetch users" });
   }
 });
 

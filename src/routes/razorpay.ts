@@ -1,22 +1,34 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import Razorpay from "razorpay";
 import rateLimit from "express-rate-limit";
+import { getServiceClient } from "../supabase";
 
 const router = Router();
 
-// Strict rate limit for creating orders (10 per hour per IP)
+// Middleware to extract user ID from Supabase JWT
+const extractUser = (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  const clerkToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+  const tokenParts = clerkToken ? clerkToken.split(".") : [];
+  let sub = req.auth?.userId;
+  if (!sub && tokenParts.length === 3) {
+    try {
+      const payload = JSON.parse(Buffer.from(tokenParts[1], "base64").toString());
+      sub = payload.sub;
+    } catch (e) {}
+  }
+  if (!sub) return res.status(401).json({ error: "Unauthorized" });
+  req.userId = sub;
+  next();
+};
+
 const orderLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 10,
   message: { error: "Too many orders created from this IP, please try again after an hour." },
 });
 
-router.post("/create-order", orderLimiter, async (req: any, res: any) => {
-  const clerkUserId = req.auth?.userId;
-  if (!clerkUserId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
+router.post("/create-order", orderLimiter, extractUser, async (req: any, res: any) => {
   try {
     const razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID!,
@@ -30,7 +42,6 @@ router.post("/create-order", orderLimiter, async (req: any, res: any) => {
     };
 
     const order = await razorpay.orders.create(options);
-
     res.json({ orderId: order.id });
   } catch (error) {
     console.error("Razorpay Order Error:", error);
@@ -38,12 +49,7 @@ router.post("/create-order", orderLimiter, async (req: any, res: any) => {
   }
 });
 
-router.post("/verify-payment", async (req: any, res: any) => {
-  const clerkUserId = req.auth?.userId;
-  if (!clerkUserId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
+router.post("/verify-payment", extractUser, async (req: any, res: any) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
   try {
@@ -53,9 +59,17 @@ router.post("/verify-payment", async (req: any, res: any) => {
     const generated_signature = hmac.digest("hex");
 
     if (generated_signature === razorpay_signature) {
-      // Payment is successful, update subscription tier via supabase service role
-      // Note: Must use a service role key here to bypass RLS for upgrading users.
-      // (Implementation requires adding service role key to env)
+      // Payment is successful, upgrade user to premium!
+      const { error } = await getServiceClient()
+        .from("profiles")
+        .update({ subscription_tier: "premium" })
+        .eq("id", req.userId);
+        
+      if (error) {
+        console.error("Failed to update subscription tier:", error);
+        return res.status(500).json({ error: "Payment verified, but failed to upgrade account." });
+      }
+
       res.json({ success: true });
     } else {
       res.status(400).json({ error: "Invalid signature" });
