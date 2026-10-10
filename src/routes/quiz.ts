@@ -84,7 +84,75 @@ router.post("/start", async (req, res) => {
   }
 });
 
-// Fetch a single attempt
+// Flashcards - Fetch due questions (MUST be before /:id to avoid wildcard capture)
+router.get("/flashcards", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
+  const supabase = getAuthClient(token);
+
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const { data: entries, error } = await supabase
+      .from("mistakes")
+      .select("question_id, interval, repetition, ease_factor")
+      .lte("next_review_at", new Date().toISOString())
+      .limit(20);
+    
+    if (error) throw error;
+    if (!entries || entries.length === 0) return res.json({ flashcards: [] });
+
+    const qIds = entries.map(e => e.question_id);
+    const { data: questions } = await supabase.from("questions").select("*").in("id", qIds);
+
+    const flashcards = questions?.map(q => ({
+      ...q,
+      sm2: entries.find(e => e.question_id === q.id)
+    }));
+
+    res.json({ flashcards: flashcards || [] });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch flashcards" });
+  }
+});
+
+// Fetch full result data (MUST be before /:id to avoid wildcard capture)
+router.get("/:id/result", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
+  const supabase = getAuthClient(token);
+
+  try {
+    const attemptId = req.params.id;
+    const { data: attempt, error: attemptError } = await supabase.from("quiz_attempts").select("*").eq("id", attemptId).maybeSingle();
+    
+    if (attemptError) throw attemptError;
+    if (!attempt || attempt.status !== "submitted") return res.status(404).json({ error: "Attempt not found or not submitted" });
+
+    const qids = attempt.question_ids;
+    
+    // Fetch answers, questions, stats, bookmarks in parallel
+    const [ansRes, qsRes, stRes, bmRes] = await Promise.all([
+      supabase.from("attempt_answers").select("question_id, notebook_effect").eq("attempt_id", attemptId),
+      supabase.from("questions").select("*, high_priority").in("id", qids),
+      supabase.rpc("get_question_stats", { p_ids: qids }),
+      token ? supabase.from("bookmarks").select("question_id").in("question_id", qids) : Promise.resolve({ data: [] }),
+    ]);
+
+    res.json({
+      attempt,
+      answers: ansRes.data || [],
+      questions: qsRes.data || [],
+      stats: stRes.data || [],
+      bookmarks: bmRes.data || [],
+    });
+  } catch (error) {
+    console.error("Fetch Result Error", error);
+    res.status(500).json({ error: "Failed to fetch result" });
+  }
+});
+
+// Fetch a single attempt (wildcard - must be LAST among GET routes)
 router.get("/:id", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
@@ -163,73 +231,7 @@ router.post("/stats", async (req, res) => {
   }
 });
 
-// Fetch full result data (attempt, questions, stats, bookmarks)
-router.get("/:id/result", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
-  const supabase = getAuthClient(token);
 
-  try {
-    const attemptId = req.params.id;
-    const { data: attempt, error: attemptError } = await supabase.from("quiz_attempts").select("*").eq("id", attemptId).maybeSingle();
-    
-    if (attemptError) throw attemptError;
-    if (!attempt || attempt.status !== "submitted") return res.status(404).json({ error: "Attempt not found or not submitted" });
-
-    const qids = attempt.question_ids;
-    
-    // Fetch answers, questions, stats, bookmarks in parallel
-    const [ansRes, qsRes, stRes, bmRes] = await Promise.all([
-      supabase.from("attempt_answers").select("question_id, notebook_effect").eq("attempt_id", attemptId),
-      supabase.from("questions").select("*, high_priority").in("id", qids),
-      supabase.rpc("get_question_stats", { p_ids: qids }),
-      token ? supabase.from("bookmarks").select("question_id").in("question_id", qids) : Promise.resolve({ data: [] }),
-    ]);
-
-    res.json({
-      attempt,
-      answers: ansRes.data || [],
-      questions: qsRes.data || [],
-      stats: stRes.data || [],
-      bookmarks: bmRes.data || [],
-    });
-  } catch (error) {
-    console.error("Fetch Result Error", error);
-    res.status(500).json({ error: "Failed to fetch result" });
-  }
-});
-
-// Flashcards - Fetch due questions
-router.get("/flashcards", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
-  const supabase = getAuthClient(token);
-
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const { data: entries, error } = await supabase
-      .from("mistakes")
-      .select("question_id, interval, repetition, ease_factor")
-      .lte("next_review_at", new Date().toISOString())
-      .limit(20);
-    
-    if (error) throw error;
-    if (!entries || entries.length === 0) return res.json({ flashcards: [] });
-
-    const qIds = entries.map(e => e.question_id);
-    const { data: questions } = await supabase.from("questions").select("*").in("id", qIds);
-
-    const flashcards = questions?.map(q => ({
-      ...q,
-      sm2: entries.find(e => e.question_id === q.id)
-    }));
-
-    res.json({ flashcards: flashcards || [] });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch flashcards" });
-  }
-});
 
 // Flashcards - Process SM-2 Grade (quality: 0-5)
 router.post("/flashcards/review", async (req, res) => {
