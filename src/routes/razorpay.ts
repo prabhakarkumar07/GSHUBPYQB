@@ -1,4 +1,4 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import Razorpay from "razorpay";
 import rateLimit from "express-rate-limit";
 import { getServiceClient } from "../supabase";
@@ -50,7 +50,7 @@ router.post("/create-order", orderLimiter, extractUser, async (req: any, res: an
 });
 
 router.post("/verify-payment", extractUser, async (req: any, res: any) => {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan_name, amount, method } = req.body;
 
   try {
     const crypto = require("crypto");
@@ -60,10 +60,23 @@ router.post("/verify-payment", extractUser, async (req: any, res: any) => {
 
     if (generated_signature === razorpay_signature) {
       // Payment is successful, upgrade user to premium!
-      const { error } = await getServiceClient()
+      const sb = getServiceClient();
+      
+      const { error } = await sb
         .from("profiles")
         .update({ subscription_tier: "premium" })
         .eq("id", req.userId);
+        
+      if (!error) {
+        await sb.from("payments").insert({
+          user_id: req.userId,
+          amount: amount || 0,
+          plan_name: plan_name || "Premium",
+          razorpay_order_id,
+          razorpay_payment_id,
+          method: method || "UPI"
+        });
+      }
         
       if (error) {
         console.error("Failed to update subscription tier:", error);
