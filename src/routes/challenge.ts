@@ -11,12 +11,16 @@ const challengeLimiter = rateLimit({
 });
 
 // Create a new Challenge
-router.post("/create", challengeLimiter, async (req, res) => {
+router.post("/create", challengeLimiter, async (req: any, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
   const supabase = getAuthClient(token);
 
   if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  // Extract Clerk user ID from the middleware-attached auth object
+  const creatorId = req.auth?.userId;
+  if (!creatorId) return res.status(401).json({ error: "User not found" });
 
   try {
     const { subjectId } = req.body;
@@ -25,7 +29,6 @@ router.post("/create", challengeLimiter, async (req, res) => {
     let query = supabase.from("questions").select("id").eq("is_dropped", false);
     if (subjectId) query = query.eq("subject_id", subjectId);
     
-    // We fetch a bunch and shuffle since we don't have ORDER BY random() via rpc here
     const { data: qData, error: qError } = await query.limit(100);
     if (qError) throw qError;
     
@@ -33,10 +36,6 @@ router.post("/create", challengeLimiter, async (req, res) => {
     
     const shuffled = qData.sort(() => 0.5 - Math.random());
     const selectedIds = shuffled.slice(0, 10).map((q) => q.id);
-
-    const { data: user } = await supabase.auth.getUser();
-    const creatorId = user.user?.id;
-    if (!creatorId) return res.status(401).json({ error: "User not found" });
 
     const { data: challenge, error } = await supabase
       .from("challenges")
@@ -51,6 +50,7 @@ router.post("/create", challengeLimiter, async (req, res) => {
     if (error) throw error;
     res.json({ challengeId: challenge.id });
   } catch (error) {
+    console.error("Challenge Create Error:", error);
     res.status(500).json({ error: "Failed to create challenge" });
   }
 });
@@ -85,18 +85,18 @@ router.get("/:id", async (req, res) => {
 });
 
 // Submit Challenge answers
-router.post("/:id/submit", challengeLimiter, async (req, res) => {
+router.post("/:id/submit", challengeLimiter, async (req: any, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : undefined;
   const supabase = getAuthClient(token);
   
   if (!token) return res.status(401).json({ error: "Unauthorized" });
 
+  const userId = req.auth?.userId;
+  if (!userId) return res.status(401).json({ error: "User not found" });
+
   try {
     const { score } = req.body;
-    const { data: user } = await supabase.auth.getUser();
-    const userId = user.user?.id;
-    if (!userId) return res.status(401).json({ error: "User not found" });
 
     const { data: challenge, error: fetchErr } = await supabase
       .from("challenges")
