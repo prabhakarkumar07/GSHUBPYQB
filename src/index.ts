@@ -19,9 +19,17 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const razorpayWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET!;
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
+
 // Security Middleware
 app.use(helmet());
-app.use(cors({ origin: ["http://localhost:3000", process.env.FRONTEND_URL].filter(Boolean) as string[] }));
+app.use(cors({ origin: allowedOrigins }));
 
 // Global Rate Limiting (200 requests per 15 minutes per IP)
 const globalLimiter = rateLimit({

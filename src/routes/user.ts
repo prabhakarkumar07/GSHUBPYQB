@@ -50,7 +50,11 @@ router.get("/analytics", async (req, res) => {
         questions ( subject_id )
       `);
 
-    if (error) throw error;
+    // Gracefully handle if table doesn't exist yet
+    if (error) {
+      console.warn("analytics: attempt_answers not available:", error.message);
+      return res.json({ analytics: [] });
+    }
 
     // Aggregate by subject_id
     const stats: Record<string, { total: number; correct: number }> = {};
@@ -73,7 +77,8 @@ router.get("/analytics", async (req, res) => {
 
     res.json({ analytics: formatted });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch analytics" });
+    console.error("analytics error:", error);
+    res.json({ analytics: [] }); // Fail gracefully, don't break dashboard
   }
 });
 
@@ -209,10 +214,13 @@ router.get("/badges", async (req, res) => {
 
   try {
     const { data, error } = await supabase.from("user_badges").select("badge_id, earned_at");
-    if (error) throw error;
+    if (error) {
+      console.warn("badges: user_badges not available:", error.message);
+      return res.json({ badges: [] });
+    }
     res.json({ badges: data || [] });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch badges" });
+    res.json({ badges: [] }); // Fail gracefully
   }
 });
 
