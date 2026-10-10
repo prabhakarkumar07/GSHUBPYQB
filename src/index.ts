@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import crypto from "crypto";
@@ -21,7 +21,7 @@ const razorpayWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET!;
 
 // Security Middleware
 app.use(helmet());
-app.use(cors({ origin: "*" })); // Allow all origins for local development
+app.use(cors({ origin: ["http://localhost:3000", process.env.FRONTEND_URL].filter(Boolean) as string[] }));
 
 // Global Rate Limiting (200 requests per 15 minutes per IP)
 const globalLimiter = rateLimit({
