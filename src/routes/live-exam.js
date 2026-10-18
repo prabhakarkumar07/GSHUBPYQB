@@ -21,8 +21,34 @@ router.get("/", async (req, res) => {
         if (error)
             throw error;
         // Fetch user's registrations to see which ones they've registered for
-        const { data: user } = await supabase.auth.getUser();
-        const userId = user.user?.id;
+        // Extract auth from request (set by Clerk middleware)
+        // @ts-ignore - auth property is added by Clerk middleware
+        const auth = req.auth;
+        let userId = null;
+        if (auth) {
+          // Try auth.uid() as a function
+          if (typeof auth.uid === 'function') {
+            try {
+              userId = auth.uid();
+            } catch (err) {
+              console.error("Error calling auth.uid():", err);
+            }
+          }
+          // Try auth.uid as a property
+          else if (auth.uid && typeof auth.uid === 'string') {
+            userId = auth.uid;
+          }
+          // Try other common properties
+          else if (auth.userId && typeof auth.userId === 'string') {
+            userId = auth.userId;
+          }
+          else if (auth.sub && typeof auth.sub === 'string') {
+            userId = auth.sub;
+          }
+          else if (auth.id && typeof auth.id === 'string') {
+            userId = auth.id;
+          }
+        }
         let registrations = [];
         if (userId) {
             const { data: regData } = await supabase
@@ -54,8 +80,18 @@ router.post("/:id/register", async (req, res) => {
     if (!token)
         return res.status(401).json({ error: "Unauthorized" });
     try {
-        const { data: user } = await supabase.auth.getUser();
-        const userId = user.user?.id;
+        // Extract auth from request (set by Clerk middleware)
+        // @ts-ignore - auth property is added by Clerk middleware
+        const auth = req.auth;
+        let userId = null;
+        if (auth && typeof auth.uid === 'function') {
+            try {
+                userId = auth.uid();
+            } catch (err) {
+                console.error("Error calling auth.uid():", err);
+                // Continue with userId as null
+            }
+        }
         if (!userId)
             return res.status(401).json({ error: "Unauthorized" });
         const { error } = await supabase
@@ -77,8 +113,18 @@ router.get("/:id/start", async (req, res) => {
     if (!token)
         return res.status(401).json({ error: "Unauthorized" });
     try {
-        const { data: user } = await supabase.auth.getUser();
-        const userId = user.user?.id;
+        // Extract auth from request (set by Clerk middleware)
+        // @ts-ignore - auth property is added by Clerk middleware
+        const auth = req.auth;
+        let userId = null;
+        if (auth && typeof auth.uid === 'function') {
+            try {
+                userId = auth.uid();
+            } catch (err) {
+                console.error("Error calling auth.uid():", err);
+                // Continue with userId as null
+            }
+        }
         if (!userId)
             return res.status(401).json({ error: "Unauthorized" });
         // Check if exam is active
@@ -123,8 +169,18 @@ router.post("/:id/submit", async (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     try {
         const { score } = req.body;
-        const { data: user } = await supabase.auth.getUser();
-        const userId = user.user?.id;
+        // Extract auth from request (set by Clerk middleware)
+        // @ts-ignore - auth property is added by Clerk middleware
+        const auth = req.auth;
+        let userId = null;
+        if (auth && typeof auth.uid === 'function') {
+            try {
+                userId = auth.uid();
+            } catch (err) {
+                console.error("Error calling auth.uid():", err);
+                // Continue with userId as null
+            }
+        }
         if (!userId)
             return res.status(401).json({ error: "Unauthorized" });
         const { error } = await supabase

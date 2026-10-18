@@ -23,10 +23,12 @@ router.get("/", async (req, res) => {
     if (error) throw error;
 
     // Fetch user's registrations to see which ones they've registered for
-    const { data: user } = await supabase.auth.getUser();
-    const userId = user.user?.id;
+    // Extract auth from request (set by Clerk middleware)
+    // @ts-ignore - auth property is added by Clerk middleware
+    const auth = req.auth;
+    const userId = auth.uid();
     let registrations: any[] = [];
-    
+
     if (userId) {
       const { data: regData } = await supabase
         .from("live_exam_registrations")
@@ -60,8 +62,10 @@ router.post("/:id/register", async (req, res) => {
   if (!token) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const { data: user } = await supabase.auth.getUser();
-    const userId = user.user?.id;
+    // Extract auth from request (set by Clerk middleware)
+    // @ts-ignore - auth property is added by Clerk middleware
+    const auth = req.auth;
+    const userId = auth.uid();
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const { error } = await supabase
@@ -85,8 +89,10 @@ router.get("/:id/start", async (req, res) => {
   if (!token) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const { data: user } = await supabase.auth.getUser();
-    const userId = user.user?.id;
+    // Extract auth from request (set by Clerk middleware)
+    // @ts-ignore - auth property is added by Clerk middleware
+    const auth = req.auth;
+    const userId = auth.uid();
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     // Check if exam is active
@@ -134,8 +140,10 @@ router.post("/:id/submit", async (req, res) => {
 
   try {
     const { score } = req.body;
-    const { data: user } = await supabase.auth.getUser();
-    const userId = user.user?.id;
+    // Extract auth from request (set by Clerk middleware)
+    // @ts-ignore - auth property is added by Clerk middleware
+    const auth = req.auth;
+    const userId = auth.uid();
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const { error } = await supabase

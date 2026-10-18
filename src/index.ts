@@ -27,9 +27,34 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
+const isAllowedDevOrigin = (origin: string) => {
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      (url.hostname === "localhost" ||
+        url.hostname === "127.0.0.1" ||
+        url.hostname.startsWith("192.168.") ||
+        url.hostname.startsWith("10.") ||
+        /^172\.(1[6-9]|2\d|3[0-1])\./.test(url.hostname)) &&
+      (url.port === "3000" || url.port === "3001")
+    );
+  } catch {
+    return false;
+  }
+};
+
 // Security Middleware
 app.use(helmet());
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || isAllowedDevOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`CORS blocked origin: ${origin}`));
+  },
+}));
 
 // Global Rate Limiting (200 requests per 15 minutes per IP)
 const globalLimiter = rateLimit({

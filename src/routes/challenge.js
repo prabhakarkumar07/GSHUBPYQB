@@ -33,8 +33,18 @@ router.post("/create", challengeLimiter, async (req, res) => {
             return res.status(400).json({ error: "Not enough questions" });
         const shuffled = qData.sort(() => 0.5 - Math.random());
         const selectedIds = shuffled.slice(0, 10).map((q) => q.id);
-        const { data: user } = await supabase.auth.getUser();
-        const creatorId = user.user?.id;
+        // Extract auth from request (set by Clerk middleware)
+        // @ts-ignore - auth property is added by Clerk middleware
+        const auth = req.auth;
+        let creatorId = null;
+        if (auth && typeof auth.uid === 'function') {
+            try {
+                creatorId = auth.uid();
+            } catch (err) {
+                console.error("Error calling auth.uid():", err);
+                // Continue with creatorId as null
+            }
+        }
         if (!creatorId)
             return res.status(401).json({ error: "User not found" });
         const { data: challenge, error } = await supabase
@@ -89,8 +99,34 @@ router.post("/:id/submit", challengeLimiter, async (req, res) => {
         return res.status(401).json({ error: "Unauthorized" });
     try {
         const { score } = req.body;
-        const { data: user } = await supabase.auth.getUser();
-        const userId = user.user?.id;
+        // Extract auth from request (set by Clerk middleware)
+        // @ts-ignore - auth property is added by Clerk middleware
+        const auth = req.auth;
+        let userId = null;
+        if (auth) {
+          // Try auth.uid() as a function
+          if (typeof auth.uid === 'function') {
+            try {
+              userId = auth.uid();
+            } catch (err) {
+              console.error("Error calling auth.uid():", err);
+            }
+          }
+          // Try auth.uid as a property
+          else if (auth.uid && typeof auth.uid === 'string') {
+            userId = auth.uid;
+          }
+          // Try other common properties
+          else if (auth.userId && typeof auth.userId === 'string') {
+            userId = auth.userId;
+          }
+          else if (auth.sub && typeof auth.sub === 'string') {
+            userId = auth.sub;
+          }
+          else if (auth.id && typeof auth.id === 'string') {
+            userId = auth.id;
+          }
+        }
         if (!userId)
             return res.status(401).json({ error: "User not found" });
         const { data: challenge, error: fetchErr } = await supabase
