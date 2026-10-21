@@ -76,6 +76,7 @@ import adminRouter from "./routes/admin";
 import razorpayRouter from "./routes/razorpay";
 import challengeRouter from "./routes/challenge";
 import liveExamRouter from "./routes/live-exam";
+import premiumRouter from "./routes/premium";
 
 // Clerk Auth Middleware (makes req.auth available)
 app.use(clerkMiddleware());
@@ -89,6 +90,7 @@ app.use("/api/admin", adminRouter);
 app.use("/api/razorpay", razorpayRouter);
 app.use("/api/challenge", challengeRouter);
 app.use("/api/live-exams", liveExamRouter);
+app.use("/api/premium", premiumRouter);
 
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });

@@ -190,7 +190,28 @@ router.post("/submit", submitLimiter, async (req, res) => {
   const supabase = getAuthClient(token);
 
   try {
-    const { attemptId, responses, timeTaken } = req.body;
+    const { attemptId, responses } = req.body;
+
+    // Fetch the attempt to get started_at for secure time calculation
+    const { data: attempt, error: attemptError } = await supabase
+      .from("quiz_attempts")
+      .select("started_at")
+      .eq("id", attemptId)
+      .single();
+
+    if (attemptError) throw attemptError;
+    if (!attempt) throw new Error("Attempt not found");
+
+    // Calculate time taken server-side for security (prevents client manipulation)
+    const startedAt = new Date(attempt.started_at);
+    const now = new Date();
+    let timeTaken = Math.floor((now.getTime() - startedAt.getTime()) / 1000); // Convert to seconds
+
+    // Bounds checking: prevent negative values and unreasonably large values
+    // Maximum reasonable time for a quiz: 24 hours (86400 seconds)
+    if (timeTaken < 0) timeTaken = 0;
+    if (timeTaken > 86400) timeTaken = 86400;
+
     const { error } = await supabase.rpc("submit_attempt", { p_attempt: attemptId, p_responses: responses, p_time_taken: timeTaken });
     if (error) throw error;
     res.json({ success: true });

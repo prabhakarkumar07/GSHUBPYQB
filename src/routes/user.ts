@@ -17,9 +17,41 @@ router.get("/dashboard", async (req: any, res) => {
     // Since Clerk handles Auth, the user doesn't auto-exist in public.profiles.
     // The very first time they load the dashboard, we insert them safely.
     // ----------------------------------------------------------------------
-    if (req.auth?.userId) {
+    // Extract user ID from auth object with safety checks (same logic as profileService)
+    let userId: string | null = null;
+    const auth = req.auth;
+    if (auth) {
+      // Try auth.uid() as a function
+      if (typeof auth.uid === 'function') {
+        try {
+          userId = auth.uid();
+        } catch (err) {
+          console.error("Error calling auth.uid():", err);
+        }
+      }
+      // Try auth.uid as a property
+      else if (auth.uid && typeof auth.uid === 'string') {
+        userId = auth.uid;
+      }
+      // Try other common properties
+      else if (auth.userId && typeof auth.userId === 'string') {
+        userId = auth.userId;
+      }
+      else if (auth.sub && typeof auth.sub === 'string') {
+        userId = auth.sub;
+      }
+      else if (auth.id && typeof auth.id === 'string') {
+        userId = auth.id;
+      }
+      // Try auth.claims.sub as a property path (JWT sub claim)
+      else if (auth.claims && typeof auth.claims === 'object' && auth.claims.sub && typeof auth.claims.sub === 'string') {
+        userId = auth.claims.sub;
+      }
+    }
+
+    if (userId) {
       // We use ON CONFLICT DO NOTHING to avoid errors if they already exist
-      await supabase.from("profiles").upsert({ id: req.auth.userId }, { onConflict: "id", ignoreDuplicates: true });
+      await supabase.from("profiles").upsert({ id: userId }, { onConflict: "id", ignoreDuplicates: true });
     }
 
     const [{ data }, m, b] = await Promise.all([

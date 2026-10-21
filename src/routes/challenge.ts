@@ -18,8 +18,39 @@ router.post("/create", challengeLimiter, async (req: any, res) => {
 
   if (!token) return res.status(401).json({ error: "Unauthorized" });
 
-  // Extract Clerk user ID from the middleware-attached auth object
-  const creatorId = req.auth?.userId;
+  // Extract user ID from auth object with safety checks (same logic as profileService)
+  let userId: string | null = null;
+  const auth = req.auth;
+  if (auth) {
+    // Try auth.uid() as a function
+    if (typeof auth.uid === 'function') {
+      try {
+        userId = auth.uid();
+      } catch (err) {
+        console.error("Error calling auth.uid():", err);
+      }
+    }
+    // Try auth.uid as a property
+    else if (auth.uid && typeof auth.uid === 'string') {
+      userId = auth.uid;
+    }
+    // Try other common properties
+    else if (auth.userId && typeof auth.userId === 'string') {
+      userId = auth.userId;
+    }
+    else if (auth.sub && typeof auth.sub === 'string') {
+      userId = auth.sub;
+    }
+    else if (auth.id && typeof auth.id === 'string') {
+      userId = auth.id;
+    }
+    // Try auth.claims.sub as a property path (JWT sub claim)
+    else if (auth.claims && typeof auth.claims === 'object' && auth.claims.sub && typeof auth.claims.sub === 'string') {
+      userId = auth.claims.sub;
+    }
+  }
+
+  const creatorId = userId;
   if (!creatorId) return res.status(401).json({ error: "User not found" });
 
   try {
@@ -92,7 +123,38 @@ router.post("/:id/submit", challengeLimiter, async (req: any, res) => {
   
   if (!token) return res.status(401).json({ error: "Unauthorized" });
 
-  const userId = req.auth?.userId;
+  // Extract user ID from auth object with safety checks (same logic as profileService)
+  let userId: string | null = null;
+  const auth = req.auth;
+  if (auth) {
+    // Try auth.uid() as a function
+    if (typeof auth.uid === 'function') {
+      try {
+        userId = auth.uid();
+      } catch (err) {
+        console.error("Error calling auth.uid():", err);
+      }
+    }
+    // Try auth.uid as a property
+    else if (auth.uid && typeof auth.uid === 'string') {
+      userId = auth.uid;
+    }
+    // Try other common properties
+    else if (auth.userId && typeof auth.userId === 'string') {
+      userId = auth.userId;
+    }
+    else if (auth.sub && typeof auth.sub === 'string') {
+      userId = auth.sub;
+    }
+    else if (auth.id && typeof auth.id === 'string') {
+      userId = auth.id;
+    }
+    // Try auth.claims.sub as a property path (JWT sub claim)
+    else if (auth.claims && typeof auth.claims === 'object' && auth.claims.sub && typeof auth.claims.sub === 'string') {
+      userId = auth.claims.sub;
+    }
+  }
+
   if (!userId) return res.status(401).json({ error: "User not found" });
 
   try {
